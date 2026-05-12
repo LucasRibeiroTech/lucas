@@ -772,17 +772,6 @@ function setupUI() {
     });
   });
 
-  // Eventos de faturamento
-  els.updateRevenueBtn.addEventListener('click', () => {
-    const value = Number(els.revenueInput.value);
-    if (Number.isFinite(value) && value > 0) { addRevenueValue(value); els.revenueInput.value = ''; }
-    else { els.revenueInput.focus(); setStatus('Digite um valor de faturamento válido.'); }
-  });
-  els.revenueInput.addEventListener('keydown', e => { if (e.key === 'Enter') els.updateRevenueBtn.click(); });
-  els.undoRevenueBtn.addEventListener('click', undoRevenueAction);
-  els.removeLastHistoryBtn.addEventListener('click', removeLastHistory);
-  els.resetRevenueBtn.addEventListener('click', resetRevenueHistory);
-
   // Eventos de matrículas
   els.addEnrollmentBtn.addEventListener('click', () => updateEnrollment(enrollment + 1).then(() => setStatus('Matrícula adicionada com sucesso.')));
   els.removeEnrollmentBtn.addEventListener('click', () => updateEnrollment(Math.max(0, enrollment - 1)).then(() => setStatus('Uma matrícula foi removida.')));
