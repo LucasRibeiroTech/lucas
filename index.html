@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Senac Tech Dashboard</title>
+<link rel="preconnect" href="https://api.fontshare.com">
+<link href="https://api.fontshare.com/v2/css?f=satoshi@400,500,700,900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js" defer></script>
+<!-- Supabase JS Client -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --font-body: Satoshi, Inter, sans-serif;
+    --text-xs: clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem);
+    --text-sm: clamp(0.875rem, 0.8rem + 0.35vw, 1rem);
+    --text-base: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
+    --text-lg: clamp(1.125rem, 1rem + 0.75vw, 1.5rem);
+    --text-xl: clamp(1.5rem, 1.2rem + 1.25vw, 2.25rem);
+    --space-2: 0.5rem; --space-3: 0.75rem; --space-4: 1rem;
+    --space-5: 1.25rem; --space-6: 1.5rem; --space-8: 2rem;
+    --color-bg: #060813;
+    --color-border: rgba(137,163,255,0.18);
+    --color-divider: rgba(255,255,255,0.08);
+    --color-text: #ecf3ff;
+    --color-text-muted: #92a5cf;
+    --color-text-faint: #5f7198;
+    --color-primary: #00e5ff;
+    --color-primary-2: #1aff9c;
+    --color-danger: #ff537f;
+    --radius-md: 0.9rem; --radius-lg: 1.25rem; --radius-xl: 1.75rem; --radius-full: 9999px;
+    --shadow-md: 0 14px 36px rgba(0,0,0,.28);
+    --shadow-lg: 0 24px 70px rgba(0,0,0,.45);
+    --transition: 220ms cubic-bezier(0.16,1,0.3,1);
+    --sidebar-width: 280px;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    min-height: 100dvh; font-family: var(--font-body); font-size: var(--text-base);
+    color: var(--color-text);
+    background: radial-gradient(circle at top right, rgba(26,255,156,.10), transparent 26%),
+                radial-gradient(circle at left top, rgba(0,229,255,.12), transparent 30%),
+                linear-gradient(180deg, #060813 0%, #09101d 100%);
+    overflow-x: hidden; overflow-y: auto;
+  }
+  button, input { font: inherit; }
+  button { cursor: pointer; border: none; }
+  button:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 3px; }
+  .dashboard { display: grid; grid-template-columns: var(--sidebar-width) 8px 1fr; min-height: 100dvh; transition: grid-template-columns var(--transition); align-items: start; }
+  .dashboard.sidebar-collapsed { grid-template-columns: 78px 8px 1fr; }
+  .sidebar { display: flex; flex-direction: column; gap: var(--space-8); padding: var(--space-8) var(--space-6); background: linear-gradient(180deg, rgba(11,17,33,.96), rgba(7,11,23,.90)); border-right: 1px solid var(--color-border); overflow: hidden; }
+  .sidebar-top { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+  .sidebar-toggle { width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; color: var(--color-primary); background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); flex-shrink: 0; }
+  .dashboard.sidebar-collapsed .sidebar-copy,
+  .dashboard.sidebar-collapsed .side-block .meta-sub,
+  .dashboard.sidebar-collapsed .side-block .side-label,
+  .dashboard.sidebar-collapsed .side-block .meta-value { display: none; }
+  .dashboard.sidebar-collapsed .sidebar { padding-left: var(--space-4); padding-right: var(--space-4); align-items: center; }
+  .dashboard.sidebar-collapsed .brand { justify-content: center; }
+  .dashboard.sidebar-collapsed .side-block { width: 100%; min-height: 56px; display: grid; place-items: center; }
+  .brand { display: flex; align-items: center; gap: var(--space-4); }
+  .brand-mark { width: 54px; height: 54px; border-radius: 18px; display: grid; place-items: center; color: var(--color-primary); background: linear-gradient(135deg, rgba(0,229,255,.15), rgba(26,255,156,.08)); border: 1px solid rgba(0,229,255,.24); box-shadow: 0 0 24px rgba(0,229,255,.12); }
+  .brand-copy h1 { font-size: var(--text-lg); line-height: 1.1; font-weight: 900; }
+  .brand-copy p { color: var(--color-text-muted); font-size: var(--text-sm); }
+  .side-block { padding: var(--space-5); background: rgba(18,26,49,.62); border: 1px solid var(--color-border); border-radius: var(--radius-lg); backdrop-filter: blur(12px); }
+  .side-label { font-size: var(--text-xs); letter-spacing: .14em; text-transform: uppercase; color: var(--color-text-faint); margin-bottom: var(--space-3); }
+  .meta-value { font-size: var(--text-lg); font-weight: 700; font-variant-numeric: tabular-nums lining-nums; }
+  .meta-sub { color: var(--color-text-muted); font-size: var(--text-sm); margin-top: var(--space-2); }
+  .resizer { position: relative; background: rgba(255,255,255,.04); cursor: col-resize; }
+  .resizer::after { content: ''; position: absolute; inset: 0; margin: auto; width: 3px; height: 56px; border-radius: 999px; background: linear-gradient(180deg, rgba(0,229,255,.1), rgba(0,229,255,.85), rgba(0,229,255,.1)); }
+  .workspace { min-width: 0; display: flex; flex-direction: column; min-height: 100dvh; }
+  .header { display: flex; justify-content: space-between; align-items: center; gap: var(--space-4); padding: var(--space-6) var(--space-8); border-bottom: 1px solid var(--color-divider); background: rgba(6,8,19,0.72); backdrop-filter: blur(16px); position: sticky; top: 0; z-index: 10; }
+  .header h2 { font-size: var(--text-xl); font-weight: 900; line-height: 1.1; }
+  .header p { color: var(--color-text-muted); font-size: var(--text-sm); margin-top: var(--space-2); }
+  .pulse { display: inline-flex; align-items: center; gap: var(--space-2); padding: .7rem 1rem; border-radius: var(--radius-full); background: rgba(0,229,255,.10); border: 1px solid rgba(0,229,255,.22); color: var(--color-primary); font-size: var(--text-sm); font-weight: 700; }
+  .pulse::before { content: ''; width: 10px; height: 10px; border-radius: 50%; background: var(--color-primary-2); box-shadow: 0 0 0 rgba(26,255,156,.65); animation: ping 1.8s infinite; }
+  .tabs { display: flex; gap: var(--space-3); padding: var(--space-5) var(--space-8) 0; }
+  .tab-btn { min-height: 46px; padding: .85rem 1.15rem; border-radius: var(--radius-full); color: var(--color-text-muted); background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); font-size: var(--text-sm); font-weight: 700; transition: all var(--transition); }
+  .tab-btn.active { color: #03111a; background: linear-gradient(135deg, var(--color-primary), var(--color-primary-2)); box-shadow: 0 10px 24px rgba(0,229,255,.18); }
+  .main { flex: 1; overflow: visible; padding: var(--space-8); min-height: 0; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; animation: fadeUp .45s cubic-bezier(0.16,1,0.3,1) both; }
+  .grid-board { display: grid; grid-template-columns: repeat(12, 1fr); gap: var(--space-6); align-items: start; }
+  .widget { min-height: 100px; }
+  .span-8 { grid-column: span 8; } .span-4 { grid-column: span 4; } .span-12 { grid-column: span 12; } .span-6 { grid-column: span 6; }
+  .drop-target { outline: 1px dashed rgba(0,229,255,.35); outline-offset: 4px; }
+  .card { position: relative; overflow: hidden; padding: var(--space-6); background: linear-gradient(180deg, rgba(13,19,36,.92), rgba(9,14,29,.92)); border: 1px solid var(--color-border); border-radius: var(--radius-xl); box-shadow: var(--shadow-md); backdrop-filter: blur(16px); transition: transform var(--transition), box-shadow var(--transition), border-color var(--transition); }
+  .card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); border-color: rgba(0,229,255,.28); }
+  .drag-handle { position: absolute; top: 12px; right: 12px; width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); color: var(--color-text-muted); cursor: grab; z-index: 2; }
+  .drag-handle:active { cursor: grabbing; }
+  .card::after { content: ''; position: absolute; inset: auto -15% -60% auto; width: 240px; height: 240px; border-radius: 50%; background: radial-gradient(circle, rgba(0,229,255,.10), transparent 65%); pointer-events: none; }
+  .card-top { display: flex; justify-content: space-between; gap: var(--space-4); align-items: start; margin-bottom: var(--space-6); }
+  .eyebrow { color: var(--color-text-faint); text-transform: uppercase; letter-spacing: .16em; font-size: var(--text-xs); margin-bottom: var(--space-2); }
+  .card-title { font-size: var(--text-lg); font-weight: 700; }
+  .kpi { font-size: clamp(2rem, 1.4rem + 2.4vw, 3.25rem); font-weight: 900; line-height: 1; letter-spacing: -.04em; font-variant-numeric: tabular-nums lining-nums; text-shadow: 0 0 28px rgba(0,229,255,.18); }
+  .muted { color: var(--color-text-muted); }
+  .meta-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-4); margin-top: var(--space-6); }
+  .mini { padding: var(--space-4); border-radius: var(--radius-lg); background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.06); }
+  .mini strong { display: block; font-size: var(--text-lg); font-variant-numeric: tabular-nums lining-nums; }
+  .mini span { color: var(--color-text-muted); font-size: var(--text-sm); }
+  .progress-shell { width: 100%; height: 16px; margin-top: var(--space-4); background: rgba(255,255,255,.06); border-radius: var(--radius-full); overflow: hidden; border: 1px solid rgba(255,255,255,.05); }
+  .progress-bar { height: 100%; width: 0%; border-radius: inherit; background: linear-gradient(90deg, var(--color-primary), var(--color-primary-2)); box-shadow: 0 0 18px rgba(0,229,255,.42); transition: width 600ms cubic-bezier(0.16,1,0.3,1); position: relative; }
+  .progress-bar::after { content: ''; position: absolute; inset: 0; background: linear-gradient(120deg, transparent 25%, rgba(255,255,255,.32) 50%, transparent 75%); animation: shimmer 2.5s linear infinite; }
+  .chart-wrap { height: 340px; margin-top: var(--space-4); }
+  canvas { width: 100% !important; height: 100% !important; }
+  .status-banner { margin-top: var(--space-4); padding: .9rem 1rem; border-radius: var(--radius-lg); background: rgba(0,229,255,.08); border: 1px solid rgba(0,229,255,.18); color: var(--color-text-muted); font-size: var(--text-sm); }
+  .input { width: 100%; padding: 1rem 1.1rem; border-radius: var(--radius-lg); border: 1px solid rgba(137,163,255,.18); background: rgba(255,255,255,.03); color: var(--color-text); transition: border-color var(--transition), box-shadow var(--transition); }
+  .input::placeholder { color: #6d80a8; }
+  .input:focus { border-color: rgba(0,229,255,.48); box-shadow: 0 0 0 4px rgba(0,229,255,.10); outline: none; }
+  .btn { min-height: 48px; padding: .95rem 1.2rem; border-radius: var(--radius-lg); font-size: var(--text-sm); font-weight: 700; transition: transform var(--transition), box-shadow var(--transition), background var(--transition), border-color var(--transition); }
+  .btn:hover { transform: translateY(-1px); }
+  .btn:active { transform: translateY(0) scale(.985); }
+  .btn-primary { color: #03111a; background: linear-gradient(135deg, var(--color-primary), var(--color-primary-2)); box-shadow: 0 10px 24px rgba(0,229,255,.22); }
+  .btn-secondary { color: var(--color-text); background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); }
+  .btn-danger { color: #ffdce6; background: rgba(255,83,127,.08); border: 1px solid rgba(255,83,127,.24); }
+  .btn-warning { color: #06111a; background: linear-gradient(135deg, #7df9ff, #00e5ff); }
+  .controls-grid { display: grid; gap: var(--space-8); }
+  .control-group { display: grid; gap: var(--space-4); }
+  .control-row { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+  .hint { color: var(--color-text-faint); font-size: var(--text-sm); }
+  .live-log { display: grid; gap: var(--space-3); margin-top: var(--space-6); }
+  .log-item { display: grid; grid-template-columns: auto 1fr auto auto; gap: var(--space-3); align-items: center; padding: .8rem 1rem; border-radius: var(--radius-md); background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.05); color: var(--color-text-muted); font-size: var(--text-sm); font-variant-numeric: tabular-nums lining-nums; }
+  .log-tag { color: var(--color-primary); font-weight: 700; }
+  .log-actions { display: flex; gap: .5rem; }
+  .chip-btn { padding: .45rem .7rem; border-radius: var(--radius-full); font-size: .78rem; font-weight: 700; color: var(--color-text); background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08); }
+  .chip-btn.danger { color: #ffc2d1; border-color: rgba(255,83,127,.2); background: rgba(255,83,127,.08); }
+  .section-title { font-size: var(--text-lg); font-weight: 800; margin-bottom: var(--space-3); }
+  .section-sub { color: var(--color-text-muted); font-size: var(--text-sm); margin-bottom: var(--space-5); }
+  /* Config tab */
+  .config-grid { display: grid; gap: var(--space-6); }
+  .config-label { font-size: var(--text-sm); color: var(--color-text-muted); margin-bottom: var(--space-2); display: block; }
+  .loading-overlay { position: fixed; inset: 0; background: rgba(6,8,19,.85); display: flex; align-items: center; justify-content: center; z-index: 999; font-size: var(--text-lg); color: var(--color-primary); font-weight: 700; letter-spacing: .05em; backdrop-filter: blur(8px); }
+  @keyframes ping { 0% { box-shadow: 0 0 0 0 rgba(26,255,156,.55); } 70% { box-shadow: 0 0 0 10px rgba(26,255,156,0); } 100% { box-shadow: 0 0 0 0 rgba(26,255,156,0); } }
+  @keyframes shimmer { from { transform: translateX(-120%); } to { transform: translateX(120%); } }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+  @media (max-width: 1180px) { .grid-board { grid-template-columns: 1fr; } .widget, .span-8, .span-4, .span-12, .span-6 { grid-column: span 1; } }
+  @media (max-width: 1080px) { body { overflow: auto; } .dashboard, .dashboard.sidebar-collapsed { grid-template-columns: 1fr; } .sidebar, .dashboard.sidebar-collapsed .sidebar { border-right: none; border-bottom: 1px solid var(--color-border); align-items: stretch; } .resizer { display: none; } .header { position: relative; } }
+  @media (max-width: 640px) { .header, .main, .sidebar, .tabs { padding-left: var(--space-4); padding-right: var(--space-4); } .meta-row, .log-item { grid-template-columns: 1fr; } .pulse { width: 100%; justify-content: center; } }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
+</style>
+</head>
+<body>
+
+<!-- Loading overlay -->
+<div class="loading-overlay" id="loadingOverlay">Carregando dados...</div>
+
+<div class="dashboard" id="dashboard">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-top">
+      <div class="brand">
+        <div class="brand-mark" aria-label="Logo Senac Tech">
+          <svg width="28" height="28" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M14 18C14 12.4772 18.4772 8 24 8H40C45.5228 8 50 12.4772 50 18V20C50 25.5228 45.5228 30 40 30H24C18.4772 30 14 34.4772 14 40V46C14 51.5228 18.4772 56 24 56H40" stroke="currentColor" stroke-width="6" stroke-linecap="round"/>
+            <path d="M44 40H24" stroke="currentColor" stroke-width="6" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="brand-copy sidebar-copy">
+          <h1 id="sidebarTitle">Senac Tech</h1>
+          <p>Painel operacional em tempo real</p>
+        </div>
+      </div>
+      <button class="sidebar-toggle" id="sidebarToggle" aria-label="Fechar ou abrir menu lateral">
+        <svg id="toggleIcon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+    </div>
+
+    <section class="side-block">
+      <div class="side-label">Meta de Faturamento</div>
+      <div class="meta-value" id="sidebarMetaFaturamento">R$ 100.000</div>
+      <div class="meta-sub">Objetivo mensal</div>
+    </section>
+
+    <section class="side-block">
+      <div class="side-label">Curso monitorado</div>
+      <div class="meta-value" id="sidebarNomeCurso" style="font-size:var(--text-base); line-height:1.35">—</div>
+      <div class="meta-sub" id="sidebarMetaMatriculas">Meta de — matrículas</div>
+    </section>
+
+    <section class="side-block">
+      <div class="side-label">Última atualização</div>
+      <div class="meta-value" id="lastUpdate">——</div>
+      <div class="meta-sub">Sidebar recolhível e redimensionável</div>
+    </section>
+  </aside>
+
+  <div class="resizer" id="sidebarResizer" aria-hidden="true"></div>
+
+  <section class="workspace">
+    <header class="header">
+      <div>
+        <h2 id="headerTitle">Dashboard BI em tempo real</h2>
+        <p id="headerSubtitle">Menu lateral recolhível, redimensionamento e cards arrastáveis.</p>
+      </div>
+      <div class="pulse">Atualização ao vivo</div>
+    </header>
+
+    <nav class="tabs" aria-label="Abas do dashboard">
+      <button class="tab-btn active" data-tab="bi">Visão BI</button>
+      <button class="tab-btn" data-tab="operacao">Operação</button>
+      <button class="tab-btn" data-tab="config">Configurações</button>
+    </nav>
+
+    <main class="main">
+
+      <!-- ABA BI -->
+      <section class="tab-panel active" id="tab-bi">
+        <div class="grid-board" id="biBoard">
+
+          <!-- Card Faturamento -->
+          <section class="card widget span-8" draggable="true">
+            <button class="drag-handle" aria-label="Mover card">⠿</button>
+            <div class="card-top">
+              <div>
+                <div class="eyebrow">Indicador principal</div>
+                <div class="card-title">Faturamento atual vs meta</div>
+              </div>
+              <div class="muted">Meta <strong id="cardMetaFaturamento" style="color:var(--color-text);font-weight:700">—</strong></div>
+            </div>
+            <div class="kpi" id="revenueDisplay">—</div>
+            <p class="muted" style="margin-top:var(--space-3)">Atingimento de <strong id="achievementText" style="color:var(--color-primary-2)">—</strong> da meta.</p>
+            <div class="progress-shell"><div class="progress-bar" id="revenueProgress"></div></div>
+            <div class="meta-row">
+              <div class="mini"><strong id="remainingDisplay">—</strong><span>Falta para a meta</span></div>
+              <div class="mini"><strong id="differenceDisplay">—</strong><span>Variação do último envio</span></div>
+              <div class="mini"><strong id="pointsDisplay">—</strong><span>Registros no gráfico</span></div>
+            </div>
+          </section>
+
+          <!-- Card Matrículas -->
+          <section class="card widget span-4" draggable="true">
+            <button class="drag-handle" aria-label="Mover card">⠿</button>
+            <div class="card-top">
+              <div>
+                <div class="eyebrow">Indicador secundário</div>
+                <div class="card-title">Matrículas do curso</div>
+              </div>
+              <div class="muted">Meta <strong id="cardMetaMatriculas" style="color:var(--color-text);font-weight:700">—</strong> alunos</div>
+            </div>
+            <p class="muted" id="cardNomeCurso">—</p>
+            <div style="display:flex;align-items:baseline;gap:var(--space-3);margin-top:var(--space-4);font-variant-numeric:tabular-nums lining-nums">
+              <strong id="enrollmentDisplay" style="font-size:clamp(2rem,1.35rem + 2vw,3rem)">—</strong>
+              <span class="muted">/ <span id="enrollmentMeta">—</span> alunos</span>
+            </div>
+            <p class="muted" style="margin-top:var(--space-2)">Progresso atual <strong id="enrollmentPercent" style="color:var(--color-primary)">—</strong></p>
+            <div class="progress-shell"><div class="progress-bar" id="enrollmentProgress"></div></div>
+            <div class="meta-row" style="grid-template-columns:1fr 1fr">
+              <div class="mini"><strong id="remainingStudents">—</strong><span>Vagas até a meta</span></div>
+              <div class="mini"><strong id="statusText">—</strong><span>Status do curso</span></div>
+            </div>
+          </section>
+
+          <!-- Card Gráfico -->
+          <section class="card widget span-12" draggable="true">
+            <button class="drag-handle" aria-label="Mover card">⠿</button>
+            <div class="card-top">
+              <div>
+                <div class="eyebrow">Evolução em tempo real</div>
+                <div class="card-title">Histórico do faturamento</div>
+              </div>
+              <div class="muted">Reordenável</div>
+            </div>
+            <div class="chart-wrap"><canvas id="revenueChart"></canvas></div>
+            <div class="status-banner" id="statusBanner">Carregando dados do Supabase...</div>
+          </section>
+
+        </div>
+      </section>
+
+      <!-- ABA OPERAÇÃO -->
+      <section class="tab-panel" id="tab-operacao">
+        <div class="controls-grid">
+
+          <section class="card">
+            <div class="section-title">Operações de faturamento</div>
+            <div class="section-sub">Área separada para inserir, corrigir, desfazer e limpar dados de faturamento.</div>
+            <div class="control-group">
+              <input class="input" id="revenueInput" type="number" min="0" step="100" placeholder="Digite o novo faturamento em reais" aria-label="Novo valor de faturamento">
+              <div class="control-row">
+                <button class="btn btn-primary" id="updateRevenueBtn">Atualizar faturamento</button>
+                <button class="btn btn-secondary" id="undoRevenueBtn">Desfazer último envio</button>
+                <button class="btn btn-danger" id="removeLastHistoryBtn">Excluir último registro</button>
+                <button class="btn btn-warning" id="resetRevenueBtn">Resetar histórico</button>
+              </div>
+              <p class="hint">Use esta aba para mudanças operacionais sem poluir a visualização principal do BI.</p>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="section-title">Operações de matrículas</div>
+            <div class="section-sub">Controle manual de entrada e correção de matrículas do curso.</div>
+            <div class="control-row">
+              <button class="btn btn-secondary" id="removeEnrollmentBtn">Remover 1</button>
+              <button class="btn btn-primary" id="addEnrollmentBtn">Adicionar 1</button>
+              <button class="btn btn-danger" id="resetEnrollmentBtn">Zerar matrículas</button>
+            </div>
+            <p class="hint" style="margin-top:var(--space-4)">A aba BI continua mostrando apenas o resultado consolidado.</p>
+          </section>
+
+          <section class="card">
+            <div class="section-title">Histórico editável</div>
+            <div class="section-sub">Revise os registros recentes, carregue valores antigos no campo ou exclua pontos errados.</div>
+            <div class="live-log" id="liveLog"></div>
+          </section>
+
+        </div>
+      </section>
+
+      <!-- ABA CONFIGURAÇÕES -->
+      <section class="tab-panel" id="tab-config">
+        <div class="controls-grid">
+          <section class="card">
+            <div class="section-title">Configurações do Dashboard</div>
+            <div class="section-sub">Altere os valores abaixo e clique em Salvar. As mudanças refletem imediatamente no painel.</div>
+            <div class="config-grid">
+              <div>
+                <label class="config-label" for="cfgTitle">Título do dashboard</label>
+                <input class="input" id="cfgTitle" type="text" placeholder="Ex: Dashboard BI em tempo real">
+              </div>
+              <div>
+                <label class="config-label" for="cfgSubtitle">Subtítulo</label>
+                <input class="input" id="cfgSubtitle" type="text" placeholder="Ex: Painel operacional Senac Tech">
+              </div>
+              <div>
+                <label class="config-label" for="cfgMetaFaturamento">Meta de faturamento (R$)</label>
+                <input class="input" id="cfgMetaFaturamento" type="number" min="0" step="1000" placeholder="Ex: 100000">
+              </div>
+              <div>
+                <label class="config-label" for="cfgNomeCurso">Nome do curso</label>
+                <input class="input" id="cfgNomeCurso" type="text" placeholder="Ex: Recepcionista em Meios de Hospedagem">
+              </div>
+              <div>
+                <label class="config-label" for="cfgMetaMatriculas">Meta de matrículas</label>
+                <input class="input" id="cfgMetaMatriculas" type="number" min="0" step="1" placeholder="Ex: 30">
+              </div>
+              <div class="control-row">
+                <button class="btn btn-primary" id="saveConfigBtn">💾 Salvar configurações</button>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+    </main>
+  </section>
+</div>
+
+<script>
+
+  
+
+// ============================================================
+// CONFIGURAÇÃO SUPABASE
+// Substitua pelos seus dados do projeto no supabase.com
+// ============================================================
+const SUPABASE_URL = 'https://nnxiowfneasivqhatqlv.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_FSpLo3hHuXFoal7OBhDzHw__DnNjgRx';
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ============================================================
+// ESTADO LOCAL (espelho do banco)
+// ============================================================
+let CONFIG = {
+  meta_faturamento: 100000,
+  meta_matriculas: 30,
+  nome_curso: '—',
+  titulo_dashboard: 'Dashboard BI em tempo real',
+  subtitulo_dashboard: 'Dados em tempo real via Supabase'
+};
+let history = [];
+let labels = [];
+let enrollment = 0;
+let revenueActionStack = [];
+let currentRevenue = 0;
+let previousRevenue = 0;
+let draggedWidget = null;
+let isResizing = false;
+let chart = null;
+
+// ============================================================
+// ELEMENTOS DO DOM
+// ============================================================
+const dashboard = document.getElementById('dashboard');
+const sidebarToggle = document.getElementById('sidebarToggle');
+const sidebarResizer = document.getElementById('sidebarResizer');
+const toggleIcon = document.getElementById('toggleIcon');
+const biBoard = document.getElementById('biBoard');
+const loadingOverlay = document.getElementById('loadingOverlay');
+
+const els = {
+  revenueDisplay: document.getElementById('revenueDisplay'),
+  achievementText: document.getElementById('achievementText'),
+  revenueProgress: document.getElementById('revenueProgress'),
+  remainingDisplay: document.getElementById('remainingDisplay'),
+  differenceDisplay: document.getElementById('differenceDisplay'),
+  pointsDisplay: document.getElementById('pointsDisplay'),
+  revenueInput: document.getElementById('revenueInput'),
+  updateRevenueBtn: document.getElementById('updateRevenueBtn'),
+  undoRevenueBtn: document.getElementById('undoRevenueBtn'),
+  removeLastHistoryBtn: document.getElementById('removeLastHistoryBtn'),
+  resetRevenueBtn: document.getElementById('resetRevenueBtn'),
+  enrollmentDisplay: document.getElementById('enrollmentDisplay'),
+  enrollmentPercent: document.getElementById('enrollmentPercent'),
+  enrollmentProgress: document.getElementById('enrollmentProgress'),
+  enrollmentMeta: document.getElementById('enrollmentMeta'),
+  remainingStudents: document.getElementById('remainingStudents'),
+  statusText: document.getElementById('statusText'),
+  addEnrollmentBtn: document.getElementById('addEnrollmentBtn'),
+  removeEnrollmentBtn: document.getElementById('removeEnrollmentBtn'),
+  resetEnrollmentBtn: document.getElementById('resetEnrollmentBtn'),
+  lastUpdate: document.getElementById('lastUpdate'),
+  liveLog: document.getElementById('liveLog'),
+  statusBanner: document.getElementById('statusBanner'),
+  cardMetaFaturamento: document.getElementById('cardMetaFaturamento'),
+  cardMetaMatriculas: document.getElementById('cardMetaMatriculas'),
+  cardNomeCurso: document.getElementById('cardNomeCurso'),
+  sidebarTitle: document.getElementById('sidebarTitle'),
+  sidebarMetaFaturamento: document.getElementById('sidebarMetaFaturamento'),
+  sidebarNomeCurso: document.getElementById('sidebarNomeCurso'),
+  sidebarMetaMatriculas: document.getElementById('sidebarMetaMatriculas'),
+  headerTitle: document.getElementById('headerTitle'),
+  headerSubtitle: document.getElementById('headerSubtitle'),
+  cfgTitle: document.getElementById('cfgTitle'),
+  cfgSubtitle: document.getElementById('cfgSubtitle'),
+  cfgMetaFaturamento: document.getElementById('cfgMetaFaturamento'),
+  cfgNomeCurso: document.getElementById('cfgNomeCurso'),
+  cfgMetaMatriculas: document.getElementById('cfgMetaMatriculas'),
+  saveConfigBtn: document.getElementById('saveConfigBtn')
+};
+
+// ============================================================
+// FORMATADORES
+// ============================================================
+const formatBRL = v => new Intl.NumberFormat('pt-BR', { style:'currency', currency:'BRL', maximumFractionDigits:0 }).format(v);
+const formatPercent = v => v.toFixed(1).replace('.', ',') + '%';
+const nowText = () => new Intl.DateTimeFormat('pt-BR', { hour:'2-digit', minute:'2-digit', second:'2-digit' }).format(new Date());
+
+function setStatus(msg) {
+  els.statusBanner.textContent = msg;
+  els.lastUpdate.textContent = nowText();
+}
+
+// ============================================================
+// APLICAR CONFIGURAÇÕES NA UI
+// ============================================================
+function applyConfig() {
+  els.headerTitle.textContent = CONFIG.titulo_dashboard;
+  els.headerSubtitle.textContent = CONFIG.subtitulo_dashboard;
+  els.sidebarTitle.textContent = 'Senac Tech';
+  els.sidebarMetaFaturamento.textContent = formatBRL(CONFIG.meta_faturamento);
+  els.sidebarNomeCurso.textContent = CONFIG.nome_curso;
+  els.sidebarMetaMatriculas.textContent = 'Meta de ' + CONFIG.meta_matriculas + ' matrículas';
+  els.cardMetaFaturamento.textContent = formatBRL(CONFIG.meta_faturamento);
+  els.cardMetaMatriculas.textContent = CONFIG.meta_matriculas;
+  els.cardNomeCurso.textContent = CONFIG.nome_curso;
+  els.enrollmentMeta.textContent = CONFIG.meta_matriculas;
+  // preencher campos de config
+  els.cfgTitle.value = CONFIG.titulo_dashboard;
+  els.cfgSubtitle.value = CONFIG.subtitulo_dashboard;
+  els.cfgMetaFaturamento.value = CONFIG.meta_faturamento;
+  els.cfgNomeCurso.value = CONFIG.nome_curso;
+  els.cfgMetaMatriculas.value = CONFIG.meta_matriculas;
+  if (chart) chart.options.scales.y.suggestedMax = CONFIG.meta_faturamento, chart.update();
+}
+
+// ============================================================
+// CARREGAR DADOS DO SUPABASE
+// ============================================================
+async function loadAll() {
+  try {
+    // 1. Configurações
+    const { data: cfgData } = await db.from('configuracoes').select('chave, valor');
+    if (cfgData) {
+      cfgData.forEach(row => {
+        if (row.chave === 'meta_faturamento') CONFIG.meta_faturamento = Number(row.valor);
+        if (row.chave === 'meta_matriculas')  CONFIG.meta_matriculas  = Number(row.valor);
+        if (row.chave === 'nome_curso')        CONFIG.nome_curso        = row.valor;
+        if (row.chave === 'titulo_dashboard')  CONFIG.titulo_dashboard  = row.valor;
+        if (row.chave === 'subtitulo_dashboard') CONFIG.subtitulo_dashboard = row.valor;
+      });
+    }
+    applyConfig();
+
+    // 2. Histórico de faturamento
+    const { data: histData } = await db
+      .from('historico_faturamento')
+      .select('*')
+      .order('criado_em', { ascending: true })
+      .limit(12);
+    if (histData && histData.length > 0) {
+      history = histData.map(r => Number(r.valor));
+      labels  = histData.map(r => r.label);
+    } else {
+      history = [0]; labels = ['T1'];
+    }
+
+    // 3. Matrículas
+    const { data: matData } = await db
+      .from('matriculas')
+      .select('total')
+      .limit(1)
+      .single();
+    if (matData) enrollment = matData.total;
+
+  } catch(e) {
+    console.error(e);
+    setStatus('Erro ao conectar ao Supabase. Verifique as credenciais.');
+  }
+  loadingOverlay.style.display = 'none';
+  syncChart();
+  renderLogs();
+  renderRevenue();
+  renderEnrollment();
+  setStatus('Dados carregados do Supabase.');
+}
+
+// ============================================================
+// CHART
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+  chart = new Chart(document.getElementById('revenueChart'), {
+    type: 'line',
+    data: { labels: [], datasets: [{ label: 'Faturamento', data: [], borderColor: '#00e5ff', borderWidth: 3, pointRadius: 4, pointHoverRadius: 6, pointBackgroundColor: '#1aff9c', pointBorderColor: '#06101a', pointBorderWidth: 2, tension: 0.35, fill: true,
+      backgroundColor: ctx => {
+        const { chart, chartArea } = ctx; if (!chartArea) return 'rgba(0,229,255,0.18)';
+        const g = chart.ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+        g.addColorStop(0, 'rgba(0,229,255,0.28)'); g.addColorStop(1, 'rgba(0,229,255,0.02)'); return g;
+      }
+    }]},
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      animation: { duration: 650, easing: 'easeOutQuart' },
+      plugins: { legend: { display: false }, tooltip: { backgroundColor:'rgba(9,14,29,0.96)', borderColor:'rgba(0,229,255,0.25)', borderWidth:1, padding:12, displayColors:false, titleColor:'#ecf3ff', bodyColor:'#92a5cf', callbacks: { label: c => formatBRL(c.raw) } } },
+      scales: {
+        x: { grid:{ color:'rgba(255,255,255,0.05)', drawBorder:false }, ticks:{ color:'#92a5cf', font:{ family:'Satoshi', size:12 } } },
+        y: { beginAtZero:true, suggestedMax: CONFIG.meta_faturamento, grid:{ color:'rgba(255,255,255,0.06)', drawBorder:false }, ticks:{ color:'#92a5cf', font:{ family:'Satoshi', size:12 }, callback: v => formatBRL(v) } }
+      }
+    }
+  });
+  loadAll();
+  // ============ REALTIME — cola aqui ============
+db.channel('dashboard-realtime')
+  .on('postgres_changes', { event: '*', schema: 'public', table: 'historico_faturamento' },
+    async () => {
+      const { data } = await db.from('historico_faturamento').select('*').order('criado_em', { ascending: true }).limit(12);
+      if (data) { history = data.map(r => Number(r.valor)); labels = data.map(r => r.label); syncChart(); renderLogs(); renderRevenue(); setStatus('Faturamento atualizado em tempo real.'); }
+    }
+  )
+  .on('postgres_changes', { event: '*', schema: 'public', table: 'matriculas' },
+    async () => {
+      const { data } = await db.from('matriculas').select('total').limit(1).single();
+      if (data) { enrollment = data.total; renderEnrollment(); setStatus('Matrículas atualizadas em tempo real.'); }
+    }
+  )
+  .on('postgres_changes', { event: '*', schema: 'public', table: 'configuracoes' },
+    async () => {
+      const { data } = await db.from('configuracoes').select('chave, valor');
+      if (data) {
+        data.forEach(row => {
+          if (row.chave === 'metafaturamento')    CONFIG.meta_faturamento   = Number(row.valor);
+          if (row.chave === 'metamatriculas')     CONFIG.meta_matriculas    = Number(row.valor);
+          if (row.chave === 'nomecurso')          CONFIG.nome_curso         = row.valor;
+          if (row.chave === 'titulodashboard')    CONFIG.titulo_dashboard   = row.valor;
+          if (row.chave === 'subtitulodashboard') CONFIG.subtitulo_dashboard = row.valor;
+        });
+        applyConfig();
+        setStatus('Configurações atualizadas em tempo real.');
+      }
+    }
+  )
+  .subscribe((status) => {
+  console.log('Realtime status:', status);
+});
+// ============ FIM DO REALTIME ============
+  setupUI();
+});
+
+
+
+// ============================================================
+// RENDER
+// ============================================================
+function refreshDerived() {
+  currentRevenue = history[history.length - 1] ?? 0;
+  previousRevenue = history.length > 1 ? history[history.length - 2] : currentRevenue;
+}
+function syncChart() {
+  if (!chart) return;
+  chart.data.labels = [...labels];
+  chart.data.datasets[0].data = [...history];
+  chart.update();
+}
+function renderLogs() {
+  const entries = history.map((value, index) => ({ label: labels[index], value, index })).slice(-8).reverse();
+  els.liveLog.innerHTML = entries.map(item => `
+    <div class="log-item">
+      <span class="log-tag">${item.label}</span>
+      <span>${formatBRL(item.value)}</span>
+      <span></span>
+      <div class="log-actions">
+        <button class="chip-btn" data-fill-index="${item.index}">Usar</button>
+        <button class="chip-btn danger" data-delete-index="${item.index}">Excluir</button>
+      </div>
+    </div>`).join('');
+  els.liveLog.querySelectorAll('[data-fill-index]').forEach(btn => btn.addEventListener('click', () => {
+    const idx = Number(btn.dataset.fillIndex);
+    els.revenueInput.value = history[idx];
+    setStatus('Valor ' + formatBRL(history[idx]) + ' carregado no campo para edição.');
+  }));
+  els.liveLog.querySelectorAll('[data-delete-index]').forEach(btn => btn.addEventListener('click', () => deleteHistoryAt(Number(btn.dataset.deleteIndex))));
+}
+function renderRevenue() {
+  refreshDerived();
+  const actualPercent = currentRevenue / CONFIG.meta_faturamento * 100;
+  const progressPercent = Math.min(actualPercent, 100);
+  const difference = currentRevenue - previousRevenue;
+  const remaining = Math.max(CONFIG.meta_faturamento - currentRevenue, 0);
+  els.revenueDisplay.textContent = formatBRL(currentRevenue);
+  els.achievementText.textContent = formatPercent(actualPercent);
+  els.revenueProgress.style.width = progressPercent + '%';
+  els.remainingDisplay.textContent = formatBRL(remaining);
+  els.differenceDisplay.textContent = difference >= 0 ? '+' + formatBRL(difference) : '-' + formatBRL(Math.abs(difference));
+  els.pointsDisplay.textContent = history.length + ' pontos';
+}
+function renderEnrollment() {
+  const percent = enrollment / CONFIG.meta_matriculas * 100;
+  els.enrollmentDisplay.textContent = enrollment;
+  els.enrollmentPercent.textContent = formatPercent(percent);
+  els.enrollmentProgress.style.width = Math.min(percent, 100) + '%';
+  els.remainingStudents.textContent = Math.max(CONFIG.meta_matriculas - enrollment, 0);
+  els.statusText.textContent = enrollment >= CONFIG.meta_matriculas ? 'Meta concluída' : enrollment >= CONFIG.meta_matriculas * 0.7 ? 'Reta final' : enrollment === 0 ? 'Sem matrículas' : 'Em captação';
+  els.lastUpdate.textContent = nowText();
+}
+
+// ============================================================
+// OPERAÇÕES DE FATURAMENTO (com Supabase)
+// ============================================================
+async function addRevenueValue(value) {
+  revenueActionStack.push({ history: [...history], labels: [...labels] });
+  const label = 'T' + (labels.length + 1);
+  const { error } = await db.from('historico_faturamento').insert({ label, valor: value });
+  if (error) { setStatus('Erro ao salvar no Supabase: ' + error.message); return; }
+  history.push(value); labels.push(label);
+  if (history.length > 12) { history.shift(); labels.shift(); }
+  await logOperation('faturamento', 'Faturamento atualizado para ' + formatBRL(value), value);
+  syncChart(); renderLogs(); renderRevenue();
+  setStatus('Faturamento atualizado para ' + formatBRL(value));
+}
+
+async function undoRevenueAction() {
+  const snapshot = revenueActionStack.pop();
+  if (!snapshot) { setStatus('Nada para desfazer no faturamento.'); return; }
+  // Remove o último registro do banco
+  const { data } = await db.from('historico_faturamento').select('id').order('criado_em', { ascending: false }).limit(1);
+  if (data && data[0]) await db.from('historico_faturamento').delete().eq('id', data[0].id);
+  history = snapshot.history; labels = snapshot.labels;
+  syncChart(); renderLogs(); renderRevenue();
+  setStatus('Última alteração do faturamento foi desfeita.');
+}
+
+async function removeLastHistory() {
+  if (history.length <= 1) { setStatus('É necessário manter pelo menos um registro.'); return; }
+  revenueActionStack.push({ history: [...history], labels: [...labels] });
+  const { data } = await db.from('historico_faturamento').select('id').order('criado_em', { ascending: false }).limit(1);
+  if (data && data[0]) await db.from('historico_faturamento').delete().eq('id', data[0].id);
+  history.pop(); labels.pop();
+  syncChart(); renderLogs(); renderRevenue();
+  setStatus('Último registro do histórico foi excluído.');
+}
+
+async function deleteHistoryAt(index) {
+  if (history.length <= 1) { setStatus('É necessário manter pelo menos um registro.'); return; }
+  revenueActionStack.push({ history: [...history], labels: [...labels] });
+  // Remove pelo label no banco
+  await db.from('historico_faturamento').delete().eq('label', labels[index]);
+  history.splice(index, 1); labels.splice(index, 1);
+  syncChart(); renderLogs(); renderRevenue();
+  setStatus('Registro removido do histórico.');
+}
+
+async function resetRevenueHistory() {
+  revenueActionStack.push({ history: [...history], labels: [...labels] });
+  await db.from('historico_faturamento').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  await db.from('historico_faturamento').insert({ label: 'T1', valor: 0 });
+  history = [0]; labels = ['T1'];
+  syncChart(); renderLogs(); renderRevenue();
+  setStatus('Histórico de faturamento resetado para zero.');
+}
+
+// ============================================================
+// OPERAÇÕES DE MATRÍCULAS (com Supabase)
+// ============================================================
+async function updateEnrollment(newTotal) {
+  const { error } = await db.from('matriculas').update({ total: newTotal, updated_at: new Date() }).eq('curso', CONFIG.nome_curso);
+  if (error) { setStatus('Erro ao salvar matrículas: ' + error.message); return; }
+  enrollment = newTotal;
+  renderEnrollment();
+}
+
+// ============================================================
+// SALVAR CONFIGURAÇÕES (com Supabase)
+// ============================================================
+async function saveConfig() {
+  const updates = [
+    { chave: 'titulo_dashboard',    valor: els.cfgTitle.value },
+    { chave: 'subtitulo_dashboard', valor: els.cfgSubtitle.value },
+    { chave: 'meta_faturamento',    valor: els.cfgMetaFaturamento.value },
+    { chave: 'nome_curso',          valor: els.cfgNomeCurso.value },
+    { chave: 'meta_matriculas',     valor: els.cfgMetaMatriculas.value },
+  ];
+  for (const u of updates) {
+    await db.from('configuracoes').upsert({ chave: u.chave, valor: String(u.valor) }, { onConflict: 'chave' });
+  }
+  CONFIG.titulo_dashboard    = els.cfgTitle.value;
+  CONFIG.subtitulo_dashboard = els.cfgSubtitle.value;
+  CONFIG.meta_faturamento    = Number(els.cfgMetaFaturamento.value);
+  CONFIG.nome_curso          = els.cfgNomeCurso.value;
+  CONFIG.meta_matriculas     = Number(els.cfgMetaMatriculas.value);
+  applyConfig();
+  renderRevenue();
+  renderEnrollment();
+  setStatus('Configurações salvas com sucesso!');
+}
+
+// ============================================================
+// LOG DE OPERAÇÕES
+// ============================================================
+async function logOperation(tipo, descricao, valor = null) {
+  await db.from('log_operacoes').insert({ tipo, descricao, valor });
+}
+
+// ============================================================
+// UI (tabs, sidebar, drag & drop, resize)
+// ============================================================
+function setupUI() {
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+  }));
+
+  sidebarToggle.addEventListener('click', () => {
+    dashboard.classList.toggle('sidebar-collapsed');
+    toggleIcon.innerHTML = dashboard.classList.contains('sidebar-collapsed')
+      ? '<path d="M9 18l6-6-6-6"/>'
+      : '<path d="M15 18l-6-6 6-6"/>';
+  });
+
+  sidebarResizer.addEventListener('mousedown', () => { isResizing = true; document.body.style.userSelect = 'none'; });
+  window.addEventListener('mousemove', e => {
+    if (!isResizing || window.innerWidth < 1080) return;
+    const width = Math.min(420, Math.max(220, e.clientX));
+    dashboard.style.setProperty('--sidebar-width', width + 'px');
+  });
+  window.addEventListener('mouseup', () => { isResizing = false; document.body.style.userSelect = ''; });
+
+  biBoard.querySelectorAll('.widget').forEach(widget => {
+    widget.addEventListener('dragstart', () => { draggedWidget = widget; setTimeout(() => widget.style.opacity = '.45', 0); });
+    widget.addEventListener('dragend', () => { widget.style.opacity = '1'; biBoard.querySelectorAll('.widget').forEach(w => w.classList.remove('drop-target')); });
+    widget.addEventListener('dragover', e => { e.preventDefault(); widget.classList.add('drop-target'); });
+    widget.addEventListener('dragleave', () => widget.classList.remove('drop-target'));
+    widget.addEventListener('drop', e => {
+      e.preventDefault(); widget.classList.remove('drop-target');
+      if (draggedWidget && draggedWidget !== widget) {
+        const widgets = [...biBoard.children];
+        const di = widgets.indexOf(draggedWidget), ti = widgets.indexOf(widget);
+        if (di > ti) biBoard.insertBefore(draggedWidget, widget);
+        else biBoard.insertBefore(draggedWidget, widget.nextSibling);
+        setStatus('Card movido na aba BI.');
+      }
+    });
+  });
+
+  // Eventos de faturamento
+  els.updateRevenueBtn.addEventListener('click', () => {
+    const value = Number(els.revenueInput.value);
+    if (Number.isFinite(value) && value > 0) { addRevenueValue(value); els.revenueInput.value = ''; }
+    else { els.revenueInput.focus(); setStatus('Digite um valor de faturamento válido.'); }
+  });
+  els.revenueInput.addEventListener('keydown', e => { if (e.key === 'Enter') els.updateRevenueBtn.click(); });
+  els.undoRevenueBtn.addEventListener('click', undoRevenueAction);
+  els.removeLastHistoryBtn.addEventListener('click', removeLastHistory);
+  els.resetRevenueBtn.addEventListener('click', resetRevenueHistory);
+
+  // Eventos de matrículas
+  els.addEnrollmentBtn.addEventListener('click', () => updateEnrollment(enrollment + 1).then(() => setStatus('Matrícula adicionada com sucesso.')));
+  els.removeEnrollmentBtn.addEventListener('click', () => updateEnrollment(Math.max(0, enrollment - 1)).then(() => setStatus('Uma matrícula foi removida.')));
+  els.resetEnrollmentBtn.addEventListener('click', () => updateEnrollment(0).then(() => setStatus('Matrículas zeradas para reinício de contagem.')));
+
+  // Salvar configurações
+  els.saveConfigBtn.addEventListener('click', saveConfig);
+}
+</script>
+</body>
+</html>
